@@ -1,7 +1,9 @@
 import numpy as np
 import pandas as pd
 import collections
+import random
 from datasets import Dataset
+from itertools import chain
 from collections import defaultdict, OrderedDict
 from transformers import Trainer, EvalPrediction
 from transformers.trainer_utils import PredictionOutput
@@ -324,3 +326,57 @@ def shuffle_questions(dataset):
     dataset_pd["question"] = np.random.default_rng(seed=388).permutation(dataset_pd.values)
 
     return Dataset.from_pandas(dataset_pd)
+
+
+# This function generates passages of random words with the relevant answers
+# for the passage interspersed. Methodology inspired by Kaushik and Lipton (2018)
+def randomize_passages(dataset):
+    dataset_qd = pd.DataFrame(dataset)
+
+    dataset_qd["gold_answer"] = dataset_qd["answers"].apply(lambda d: d["text"][0])
+
+    vocab = load_vocab("models/model_init/vocab.txt")
+
+    passage_answers = dataset_qd.groupby("context")["gold_answer"].apply(list)
+
+    random.seed(388)
+    random_passages = []
+    for passage in dataset_qd["context"]:
+        random_passages.append(randomize_passage(passage, passage_answers[passage], vocab))
+
+    dataset_qd["context"] = pd.Series(random_passages)
+    dataset_qd = dataset_qd.drop("gold_answer", axis=1)
+
+    return Dataset.from_pandas(dataset_qd)
+
+
+# Load the vocab of random words to use when generating passages.
+def load_vocab(file_path):
+    vocab = []
+    with open(file_path, encoding="utf-8") as f:
+        for line in f.readlines():
+            vocab.append(line.strip())
+
+    return vocab
+
+
+# Randomize a single passage. Same length token wise, answers randomly
+# found within the passage (but their span is still intact).
+def randomize_passage(passage, answers, vocab):
+    passage_split = passage.split(" ")
+    answers_split = [answer.split(" ") for answer in answers]
+    random.shuffle(answers_split)
+    indices = [0]
+
+    for answer in answers_split:
+        indices.append(indices[-1] + len(answer))
+    
+    passage_random = list(chain.from_iterable(answers_split))
+
+    while len(passage_random) < len(passage_split):
+        insert_slot = random.choice(range(len(indices)))
+        passage_random.insert(indices[insert_slot], random.choice(vocab))
+        for i in range(insert_slot + 1, len(indices)):
+            indices[i] += 1
+    
+    return " ".join(passage_random)
