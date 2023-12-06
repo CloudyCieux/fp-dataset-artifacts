@@ -1,5 +1,7 @@
 import numpy as np
+import pandas as pd
 import collections
+from datasets import Dataset
 from collections import defaultdict, OrderedDict
 from transformers import Trainer, EvalPrediction
 from transformers.trainer_utils import PredictionOutput
@@ -312,3 +314,13 @@ class QuestionAnsweringTrainer(Trainer):
         self.control = self.callback_handler.on_evaluate(self.args, self.state,
                                                          self.control, metrics)
         return metrics
+    
+
+# This function randomly shuffles the questions while keeping the connection
+# between passages and answers intact. Methodology inspired by Kaushik and Lipton (2018)
+def shuffle_questions(dataset):
+    dataset_pd = pd.DataFrame(dataset)
+
+    dataset_pd["question"] = np.random.default_rng(seed=388).permutation(dataset_pd.values)
+
+    return Dataset.from_pandas(dataset_pd)

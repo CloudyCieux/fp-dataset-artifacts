@@ -2,7 +2,8 @@ import datasets
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, \
     AutoModelForQuestionAnswering, Trainer, TrainingArguments, HfArgumentParser
 from helpers import prepare_dataset_nli, prepare_train_dataset_qa, \
-    prepare_validation_dataset_qa, QuestionAnsweringTrainer, compute_accuracy
+    prepare_validation_dataset_qa, QuestionAnsweringTrainer, compute_accuracy, \
+    shuffle_questions
 import os
 import json
 
@@ -46,6 +47,8 @@ def main():
                       help='Limit the number of examples to train on.')
     argp.add_argument('--max_eval_samples', type=int, default=None,
                       help='Limit the number of examples to evaluate on.')
+    argp.add_argument('--passage-only', action='store_true',
+                      help="Assign questions randomly to passage/answer pairs.")
 
     training_args, args = argp.parse_args_into_dataclasses()
 
@@ -114,6 +117,8 @@ def main():
         )
     if training_args.do_eval:
         eval_dataset = dataset[eval_split]
+        if args.passage_only:
+            eval_dataset = shuffle_questions(eval_dataset)
         if args.max_eval_samples:
             eval_dataset = eval_dataset.select(range(args.max_eval_samples))
         eval_dataset_featurized = eval_dataset.map(
